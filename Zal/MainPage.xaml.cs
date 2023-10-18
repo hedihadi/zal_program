@@ -1,6 +1,5 @@
 ﻿using Firebase.Auth;
 using Firebase.Auth.UI;
-using H.Socket.IO;
 using Microsoft.Win32;
 using Newtonsoft.Json;
 using System;
@@ -10,7 +9,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
@@ -29,7 +27,10 @@ using System.Windows.Shapes;
 using Application = System.Windows.Application;
 using Path = System.IO.Path;
 using Zal;
+using SocketIOClient;
 using System.Security.Principal;
+using Newtonsoft.Json.Linq;
+using System.Security.Cryptography;
 
 namespace Zal
 {
@@ -39,7 +40,7 @@ namespace Zal
     public partial class MainPage : Page
     {
         ComputerData computerData = new ComputerData();
-        public SocketIoClient socketio = new SocketIoClient();
+        public SocketIOClient.SocketIO socketio;
 
 
         bool isConnectedToServer = false;
@@ -68,106 +69,7 @@ namespace Zal
             var user = FirebaseUI.Instance.Client.User;
             userName.Text = $"Welcome, {user.Info.DisplayName}.";
 
-            socketio.On("room_clients", data =>
-            {
-                List<int> parsedData = JsonConvert.DeserializeObject<List<int>>(data);
-                // if the data is 1, that means the client type is 1, which means this client is a phone
-                if (parsedData.Contains(1))
-                {
-                    areThereClientListeners = true;
-                    if (this.data != null)
-                    {
-                        var jsonString = JsonConvert.SerializeObject(this.data);
-                        sendSocketData("pc_data", jsonString);
-                    }
-
-                    addStringToListbox("mobile joined");
-                    //send diskinfo
-                    sendDiskData();
-
-
-                }
-                else
-                {
-
-                    areThereClientListeners = false;
-                    addStringToListbox("mobile left");
-                    fpsManager.setShouldSendFpsData(false);
-                    
-
-                }
-            });
-            socketio.On("kill_process", data =>
-            {
-                List<int> parsedData = JsonConvert.DeserializeObject<List<int>>(data);
-                // if the data is 1, that means the client type is 1, which means this client is a phone
-                System.Diagnostics.Debug.Write(parsedData);
-                foreach (var pid in parsedData)
-                {
-                    try
-                    {
-                        Process proc = Process.GetProcessById(pid);
-                        if (!proc.HasExited) proc.Kill();
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Process already exited.
-                    }
-                }
-            });
-            socketio.On("restart_admin", () =>
-            {
-                string selfPath = Process.GetCurrentProcess().MainModule.FileName;
-
-                var proc = new Process
-                {
-                    StartInfo =
-        {
-            FileName = selfPath,
-            UseShellExecute = true,
-            Verb = "runas"
-        }
-                };
-
-                proc.Start();
-                this.Dispatcher.Invoke(() =>
-                {
-                    System.Windows.Application.Current.Shutdown();
-
-                });
-
-
-            });
-            socketio.On("start_fps", data =>
-            {
-
-                fpsManager.setShouldSendFpsData(true);
-            });
-            socketio.On("stress_test", data =>
-            {
-                string unescapedJson = data.Replace("\\", "");
-                Dictionary<string, dynamic> parsedData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(unescapedJson);
-                extractAndRunStressTest(parsedData["type"], parsedData["seconds"]);
-
-            });
-            socketio.On("stop_fps", () =>
-            {
-
-                fpsManager.setShouldSendFpsData(false);
-                fpsManager.clear();
-            });
-            socketio.Connected += (sender, args) =>
-            {
-                isConnectedToServer = true;
-                socketConnectionChanged(true);
-            };
-            socketio.Disconnected += (sender, args) =>
-            {
-                isConnectedToServer = false;
-                socketConnectionChanged(false);
-                connectToServer();
-            };
-            connectToServer();
+            setupSocketio();
 
 
 
@@ -291,7 +193,7 @@ namespace Zal
             var compressedBytes = CompressString(uncompressedData);
             Dictionary<String, String> map = new Dictionary<String, String>();
             map["data"] = compressedBytes;
-            await socketio.Emit(to, map);
+            await socketio.EmitAsync(to, map);
         }
         static string CompressString(string input)
         {
@@ -419,32 +321,148 @@ namespace Zal
 
             });
         }
-        private async void connectToServer()
+        private async void setupSocketio()
         {
-            await Task.Delay(new TimeSpan(0, 0, 1)).ContinueWith(async o => {
+            var uid = FirebaseUI.Instance.Client.User.Uid;
+            var idToken = await FirebaseUI.Instance.Client.User.GetIdTokenAsync();
+            socketio = new SocketIOClient.SocketIO($"http://192.168.0.112:5000",
+            //socketio = new SocketIOClient.SocketIO($"https://api.zalapp.com",
+                new SocketIOOptions
+            {
+                Query = new List<KeyValuePair<string, string>>
+    {
+        new KeyValuePair<string, string>("uid", uid),
+        new KeyValuePair<string, string>("idToken", idToken),
+         new KeyValuePair<string, string>("type","0")
+    }
+            });
 
-                socketConnectionChanged(false, isConnecting: true);
-                var uid = FirebaseUI.Instance.Client.User.Uid;
-                var idToken = await FirebaseUI.Instance.Client.User.GetIdTokenAsync();
-
-                if (isConnectedToServer)
+            socketio.On("room_clients", response =>
+            {
+                List<int> parsedData = response.GetValue<List<int>>();
+                // if the data is 1, that means the client type is 1, which means this client is a phone
+                if (parsedData.Contains(1))
                 {
-                    await socketio.DisconnectAsync();
-                    isConnectedToServer = false;
-                    return;
+                    areThereClientListeners = true;
+                    if (this.data != null)
+                    {
+                        var jsonString = JsonConvert.SerializeObject(this.data);
+                        sendSocketData("pc_data", jsonString);
+                    }
+
+                    addStringToListbox("mobile joined");
+                    //send diskinfo
+                    sendDiskData();
+
+
                 }
-                try
+                else
                 {
 
-                    await socketio.ConnectAsync(new Uri($"https://api.zalapp.com?uid={uid}&idToken={idToken}&type=0"));
-                    //await socketio.ConnectAsync(new Uri($"http://192.168.0.112:5000?uid={uid}&idToken={idToken}&type=0"));
-                }
-                catch (Exception ex)
-                {
-                    addStringToListbox(ex.Message);
-                    connectToServer();
+                    areThereClientListeners = false;
+                    addStringToListbox("mobile left");
+                    fpsManager.setShouldSendFpsData(false);
+
+
                 }
             });
+            socketio.On("kill_process", response =>
+            {
+                List<int> parsedData = JsonConvert.DeserializeObject<List<int>>(response.GetValue<string>());
+                // if the data is 1, that means the client type is 1, which means this client is a phone
+                System.Diagnostics.Debug.Write(parsedData);
+                foreach (var pid in parsedData)
+                {
+                    try
+                    {
+                        Process proc = Process.GetProcessById(pid);
+                        if (!proc.HasExited) proc.Kill();
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Process already exited.
+                    }
+                }
+            });
+            socketio.On("restart_admin", response =>
+            {
+                string selfPath = Process.GetCurrentProcess().MainModule.FileName;
+
+                var proc = new Process
+                {
+                    StartInfo =
+        {
+            FileName = selfPath,
+            UseShellExecute = true,
+            Verb = "runas"
+        }
+                };
+
+                proc.Start();
+                this.Dispatcher.Invoke(() =>
+                {
+                    System.Windows.Application.Current.Shutdown();
+
+                });
+
+
+            });
+            socketio.On("start_fps", data =>
+            {
+
+                fpsManager.setShouldSendFpsData(true);
+            });
+            socketio.On("stress_test", data =>
+            {
+                string unescapedJson = data.GetValue<String>().Replace("\\", "");
+                Dictionary<string, dynamic> parsedData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(unescapedJson);
+                extractAndRunStressTest(parsedData["type"], parsedData["seconds"]);
+
+            });
+            socketio.On("stop_fps", response =>
+            {
+
+                fpsManager.setShouldSendFpsData(false);
+                fpsManager.clear();
+            });
+            socketio.OnConnected += (sender, args) =>
+            {
+                isConnectedToServer = true;
+                socketConnectionChanged(true);
+            };
+            socketio.OnDisconnected += (sender, args) =>
+            {
+                isConnectedToServer = false;
+                socketConnectionChanged(false);
+                connectToServer();
+            };
+            connectToServer();
+        }
+        private async void connectToServer()
+        {
+            socketConnectionChanged(false, isConnecting: true);
+            
+
+            if (isConnectedToServer)
+            {
+                await socketio.DisconnectAsync();
+                isConnectedToServer = false;
+                return;
+            }
+            try
+            {
+
+                //await socketio.ConnectAsync(new Uri($"https://api.zalapp.com?uid={uid}&idToken={idToken}&type=0"));
+                //socketio = socketio.ConnectAsync(new Uri($"http://192.168.0.112:5000?uid={uid}&idToken={idToken}&type=0"));
+                
+                socketio.ConnectAsync();
+
+            }
+            catch (Exception ex)
+            {
+                addStringToListbox(ex.Message);
+                connectToServer();
+            }
 
         }
 
