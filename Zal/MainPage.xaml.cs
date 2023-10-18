@@ -37,35 +37,30 @@ namespace Zal
     /// Interaction logic for MainPage.xaml
     /// </summary>
     public partial class MainPage : Page
-    { 
-        ComputerData computerData=new ComputerData();
+    {
+        ComputerData computerData = new ComputerData();
         public SocketIoClient socketio = new SocketIoClient();
-        public bool shouldSendFpsData = false;
-        List<String> fpsData = new List<string>();
+
+
         bool isConnectedToServer = false;
-        private Process _presentmonProcess;
+
         private Process _taskmanagerProcess;
         public bool areThereClientListeners = false;
-        HashSet<String> presentmonProcessNames = new HashSet<String>();
-        String? presentmonChosenProcessName = null;
         List<DiskInfoCrystal> diskInfos;
-
+        FpsManager fpsManager;
         //this variable is used to save computerdata,
         //we use it to immediately send a packet of data
         //when the user connects. to reduce waiting time on the app.
-        Dictionary<String,dynamic>? data=null;
-        Task fpsTask;
+        Dictionary<String, dynamic>? data = null;
+        
 
-        public static String GetTimestamp()
-        {
-
-            return (new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds()).ToString();
-        }
+        
         public MainPage()
         {
             InitializeComponent();
+            fpsManager = new FpsManager(data => sendFpsData(data));
             FirebaseUI.Instance.Client.AuthStateChanged += this.AuthStateChanged;
-            socketConnectionChanged(false,isConnecting:true);
+            socketConnectionChanged(false, isConnecting: true);
             checkForUpdates();
             updateCheckBoxes();
             startTaskmanager();
@@ -77,7 +72,7 @@ namespace Zal
             {
                 List<int> parsedData = JsonConvert.DeserializeObject<List<int>>(data);
                 // if the data is 1, that means the client type is 1, which means this client is a phone
-                if (parsedData.Contains(1)) 
+                if (parsedData.Contains(1))
                 {
                     areThereClientListeners = true;
                     if (this.data != null)
@@ -85,22 +80,20 @@ namespace Zal
                         var jsonString = JsonConvert.SerializeObject(this.data);
                         sendSocketData("pc_data", jsonString);
                     }
-                    
+
                     addStringToListbox("mobile joined");
                     //send diskinfo
                     sendDiskData();
-                   
+
 
                 }
                 else
                 {
-                   
+
                     areThereClientListeners = false;
                     addStringToListbox("mobile left");
-                    presentmonProcessNames.Clear();
-                    presentmonChosenProcessName = null;
-                    shouldSendFpsData = false;
-                    fpsData.Clear();
+                    fpsManager.setShouldSendFpsData(false);
+                    
 
                 }
             });
@@ -109,7 +102,7 @@ namespace Zal
                 List<int> parsedData = JsonConvert.DeserializeObject<List<int>>(data);
                 // if the data is 1, that means the client type is 1, which means this client is a phone
                 System.Diagnostics.Debug.Write(parsedData);
-                foreach(var pid in parsedData)
+                foreach (var pid in parsedData)
                 {
                     try
                     {
@@ -125,7 +118,7 @@ namespace Zal
             socketio.On("restart_admin", () =>
             {
                 string selfPath = Process.GetCurrentProcess().MainModule.FileName;
-               
+
                 var proc = new Process
                 {
                     StartInfo =
@@ -147,89 +140,8 @@ namespace Zal
             });
             socketio.On("start_fps", data =>
             {
-                var fpsAction = (object obj) =>
-                {
-                    StreamReader reader = _presentmonProcess.StandardOutput;
 
-                    while (!reader.EndOfStream)
-                    {
-                        if (shouldSendFpsData == true && areThereClientListeners)
-                        {
-                            string line = reader.ReadLine();
-                            var msBetweenPresents = "";
-                            try
-                            {
-                                msBetweenPresents = line.Split(",")[9];
-                            }
-                            catch
-                            {
-                                continue;
-                            }
-                            var processName = line.Split(",")[0];
-                            if (presentmonProcessNames.Contains(processName) == false)
-                            {
-                                List<String> ignoredProcesses = new List<string>();
-                                ignoredProcesses.Add("dwm.exe");
-                                ignoredProcesses.Add("Application");
-                                ignoredProcesses.Add("devenv.exe");
-                                if (ignoredProcesses.Contains(processName) == false)
-                                {
-                                    presentmonProcessNames.Add(processName);
-                                    var processNamesString = JsonConvert.SerializeObject(presentmonProcessNames);
-                                    sendSocketData("fps_processes", processNamesString);
-                                }
-                                 ;
-                            }
-
-                            if (presentmonChosenProcessName != null && presentmonChosenProcessName == processName)
-                            {
-                                var time = GetTimestamp();
-                                Dictionary<String, String> data = new Dictionary<String, String>();
-                                if (msBetweenPresents.Any(char.IsDigit))
-                                {
-                                    data[processName] = msBetweenPresents;
-                                    //data[msBetweenPresents] = time;
-                                    //data["process"] = line.Split(",")[0];
-                                    fpsData.Add(JsonConvert.SerializeObject(data));
-
-                                    if (fpsData.Count > 1)
-                                    {
-
-                                        var jsonString = JsonConvert.SerializeObject(fpsData);
-                                        sendSocketData("fps_data", jsonString);
-                                        fpsData.Clear();
-                                        addStringToListbox("sent fps data");
-                                    }
-                                }
-                            }
-
-
-
-
-
-
-                        }
-
-
-
-
-                    }
-
-                };
-                fpsTask = new Task(fpsAction, "fpsTask");
-                runPresentmon();
-                shouldSendFpsData = true;
-                fpsData.Clear();
-                if (data != "")
-                {
-                    presentmonChosenProcessName = data;
-                }
-                if (fpsTask.Status != TaskStatus.Running)
-                {
-
-                    fpsTask.Start();
-
-                }
+                fpsManager.setShouldSendFpsData(true);
             });
             socketio.On("stress_test", data =>
             {
@@ -240,10 +152,9 @@ namespace Zal
             });
             socketio.On("stop_fps", () =>
             {
-                stopPresentmon();
-                shouldSendFpsData = false;
-                presentmonChosenProcessName = null;
-                presentmonProcessNames.Clear();
+
+                fpsManager.setShouldSendFpsData(false);
+                fpsManager.clear();
             });
             socketio.Connected += (sender, args) =>
             {
@@ -258,11 +169,18 @@ namespace Zal
             };
             connectToServer();
 
-            
+
 
 
 
         }
+       
+        public void sendFpsData(String data)
+        {
+            sendSocketData("fps_data",data);
+            addStringToListbox("sent fps data");
+        }
+
         public static bool IsAdministrator()
         {
             return (new WindowsPrincipal(WindowsIdentity.GetCurrent()))
@@ -271,10 +189,11 @@ namespace Zal
         private async void sendDiskData()
         {
             await runCrystalDiskInfo();
-            if(diskInfos!=null) {
+            if (diskInfos != null)
+            {
                 sendSocketData("disk_data", Newtonsoft.Json.JsonConvert.SerializeObject(diskInfos));
             }
-            
+
 
         }
         private async Task runCrystalDiskInfo()
@@ -336,17 +255,17 @@ namespace Zal
             var process = new Process { StartInfo = startInfo };
 
             process.Start();
-             process.WaitForExit();
+            process.WaitForExit();
             string resultPath = Path.Combine(tempPath, "DiskInfo.txt");
-            diskInfos=DiskDataClass.getData(resultPath);
+            diskInfos = DiskDataClass.getData(resultPath);
 
         }
         private void startTaskmanager()
         {
-            if (IsAdministrator()==false)
+            if (IsAdministrator() == false)
             {
                 //dont run because psutil uses too much CPU if it's not running as adminstrator
-               //return;
+                return;
             }
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "task_manager.exe");
             try
@@ -394,13 +313,13 @@ namespace Zal
         {
             var bc = new BrushConverter();
             if (isConnecting)
-               
+
             {
                 this.Dispatcher.Invoke(() =>
                 {
                     connectionStateIndicator.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#219ebc"));
                     connectionStateText.Text = "Connecting...";
-                    
+
                 });
 
             }
@@ -411,7 +330,7 @@ namespace Zal
                     connectionStateText.Text = "Connected to Server";
                     connectionStateIndicator.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#29bf12"));
                 });
-                
+
             }
             else
             {
@@ -420,7 +339,7 @@ namespace Zal
                     connectionStateText.Text = "Not Connected";
                     connectionStateIndicator.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#e63946"));
                 });
-               
+
 
             }
         }
@@ -497,7 +416,7 @@ namespace Zal
 
             Application.Current.Dispatcher.Invoke(() =>
             {
-               
+
             });
         }
         private async void connectToServer()
@@ -506,8 +425,8 @@ namespace Zal
 
                 socketConnectionChanged(false, isConnecting: true);
                 var uid = FirebaseUI.Instance.Client.User.Uid;
-                var idToken=await FirebaseUI.Instance.Client.User.GetIdTokenAsync();
-               
+                var idToken = await FirebaseUI.Instance.Client.User.GetIdTokenAsync();
+
                 if (isConnectedToServer)
                 {
                     await socketio.DisconnectAsync();
@@ -534,49 +453,19 @@ namespace Zal
 
         private void addStringToListbox(String text)
         {
-           Application.Current.Dispatcher.Invoke(new MethodInvoker(delegate
+            Application.Current.Dispatcher.Invoke(new MethodInvoker(delegate
             {
                 while (ListBox.Items.Count > 3)
                 {
                     ListBox.Items.RemoveAt(ListBox.Items.Count - 1);
                 }
-                TextBlock block=new TextBlock();
+                TextBlock block = new TextBlock();
                 block.Text = $"{DateTime.Now.ToString("h:mm:ss tt")} - {text}";
                 ListBox.Items.Insert(0, block);
             }));
         }
-        private void stopPresentmon()
-        {
-           
-            if (_presentmonProcess != null && !_presentmonProcess.HasExited)
-            {
-                _presentmonProcess.Kill();
-            }
-        }
-        private void runPresentmon()
-        {
-            stopPresentmon();
-
-
-            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "presentmon.exe");
-            try
-            {
-                File.WriteAllBytes(path, Zal.Resources.presentmon);
-            }
-            catch (Exception ex) { }
-
-            ProcessStartInfo startInfo = new ProcessStartInfo
-            {
-                FileName = path, // Replace with the actual path
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                Arguments = "-output_stdout -stop_existing_session",
-            };
-            _presentmonProcess = new Process { StartInfo = startInfo };
-
-            _presentmonProcess.Start();
-        }
+       
+       
 
         async static Task DownloadFileAsync(string url, string localFilePath)
         {
@@ -662,12 +551,12 @@ namespace Zal
         }
         private void runAtStartup_Checked(object sender, RoutedEventArgs e)
         {
-        
+
         }
 
         private void minimizeToTray_Checked(object sender, RoutedEventArgs e)
         {
-           
+
         }
         private void setStartup()
         {
@@ -718,18 +607,18 @@ namespace Zal
             {
                 this.data["taskmanager"] = getTaskmanagerData();
             }
-            catch(Exception c)
+            catch (Exception c)
             {
                 System.Diagnostics.Debug.WriteLine(c);
             }
             if (areThereClientListeners == false)
             {
-                stopPresentmon();
+                fpsManager.setShouldSendFpsData(false);
                 return;
             }
 
             //send computer data 
-            
+
             var jsonString = JsonConvert.SerializeObject(this.data);
             sendSocketData("pc_data", jsonString);
             addStringToListbox("sent hardware data");
@@ -739,7 +628,7 @@ namespace Zal
             string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "zal_taskmanager_result.json");
             string contents = File.ReadAllText(path);
             return JsonConvert.DeserializeObject(contents);
-            
+
 
 
         }
