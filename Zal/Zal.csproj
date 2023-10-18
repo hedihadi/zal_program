@@ -10,7 +10,7 @@
         <TargetFramework>net6.0-windows</TargetFramework>
         <UseWPF>true</UseWPF>
         <UseWindowsForms>true</UseWindowsForms>
-        <FileVersion>1.0.0</FileVersion>
+        <FileVersion>1.1.0</FileVersion>
         <ApplicationIcon>logo.ico</ApplicationIcon>
     </PropertyGroup>
 <ItemGroup>
