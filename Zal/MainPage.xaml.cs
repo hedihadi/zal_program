@@ -345,8 +345,8 @@ namespace Zal
         {
             if (IsAdministrator()==false)
             {
-                //dont run if it's not runnign as adminstrator, because psutil uses too much CPU if it's not runnign as adminstrator
-               return;
+                //dont run because psutil uses too much CPU if it's not running as adminstrator
+               //return;
             }
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "task_manager.exe");
             try
@@ -522,7 +522,7 @@ namespace Zal
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine(ex.Message);
+                    addStringToListbox(ex.Message);
                     connectToServer();
                 }
             });
@@ -718,9 +718,9 @@ namespace Zal
             {
                 this.data["taskmanager"] = getTaskmanagerData();
             }
-            catch
+            catch(Exception c)
             {
-                
+                System.Diagnostics.Debug.WriteLine(c);
             }
             if (areThereClientListeners == false)
             {
@@ -754,7 +754,7 @@ namespace Zal
                     dispatcherTimer_Tick();
                 });
             };
-            dispatcherTimer.Interval = TimeSpan.FromMilliseconds(900);
+            dispatcherTimer.Interval = TimeSpan.FromMilliseconds(1000);
             dispatcherTimer.Start();
         }
     }
