@@ -41,7 +41,9 @@ namespace Zal
     {
         ComputerData computerData = new ComputerData();
         public SocketIOClient.SocketIO socketio;
-
+        //we use this list to cache task manager icons. we send each process icon only once and then we keep track of the processes here to
+        //never send that specific process's icon again unless the user disconnects. using this method we reduce payload of 38kb to only 3kb.
+        List<string> sentTaskmanagerProcessIcons = new List<string>();
 
         bool isConnectedToServer = false;
 
@@ -53,9 +55,7 @@ namespace Zal
         //we use it to immediately send a packet of data
         //when the user connects. to reduce waiting time on the app.
         Dictionary<String, dynamic>? data = null;
-        
 
-        
         public MainPage()
         {
             InitializeComponent();
@@ -167,7 +167,7 @@ namespace Zal
             if (IsAdministrator() == false)
             {
                 //dont run because psutil uses too much CPU if it's not running as adminstrator
-                return;
+                //return;
             }
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "task_manager.exe");
             try
@@ -193,6 +193,7 @@ namespace Zal
             var compressedBytes = CompressString(uncompressedData);
             Dictionary<String, String> map = new Dictionary<String, String>();
             map["data"] = compressedBytes;
+            System.Diagnostics.Debug.WriteLine($"sent payload of {System.Text.ASCIIEncoding.Unicode.GetByteCount(compressedBytes)/1024}kb");
             await socketio.EmitAsync(to, map);
         }
         static string CompressString(string input)
@@ -351,6 +352,7 @@ namespace Zal
                     }
 
                     addStringToListbox("mobile joined");
+                    sentTaskmanagerProcessIcons.Clear();
                     //send diskinfo
                     sendDiskData();
 
@@ -361,6 +363,7 @@ namespace Zal
 
                     areThereClientListeners = false;
                     addStringToListbox("mobile left");
+                    sentTaskmanagerProcessIcons.Clear();
                     fpsManager.setShouldSendFpsData(false);
 
 
@@ -623,7 +626,22 @@ namespace Zal
             this.data = computerData.getComputerData();
             try
             {
-                this.data["taskmanager"] = getTaskmanagerData();
+                var taskmanager = getTaskmanagerData();
+                foreach(KeyValuePair<string, dynamic> entry in taskmanager)
+                { 
+                    if (sentTaskmanagerProcessIcons.Contains(entry.Key))
+                    {
+                        taskmanager[entry.Key].Remove("icon");
+                    }
+                    else
+                    {
+                        sentTaskmanagerProcessIcons.Add(entry.Key);
+                    }
+                    
+                }
+                
+                this.data["taskmanager"] = taskmanager;
+
             }
             catch (Exception c)
             {
@@ -641,12 +659,13 @@ namespace Zal
             sendSocketData("pc_data", jsonString);
             addStringToListbox("sent hardware data");
         }
-        public dynamic getTaskmanagerData()
+        public Dictionary<string, dynamic> getTaskmanagerData()
         {
             string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "zal_taskmanager_result.json");
             string contents = File.ReadAllText(path);
-            return JsonConvert.DeserializeObject(contents);
-
+            Dictionary<string, dynamic> parsedData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(contents);
+            return parsedData;
+            
 
 
         }
