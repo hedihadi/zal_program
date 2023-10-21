@@ -325,8 +325,8 @@ namespace Zal
         {
             var uid = FirebaseUI.Instance.Client.User.Uid;
             var idToken = await FirebaseUI.Instance.Client.User.GetIdTokenAsync();
-            socketio = new SocketIOClient.SocketIO($"http://192.168.0.112:5000",
-            //socketio = new SocketIOClient.SocketIO($"https://api.zalapp.com",
+            //socketio = new SocketIOClient.SocketIO($"http://192.168.0.112:5000",
+            socketio = new SocketIOClient.SocketIO($"https://api.zalapp.com",
                 new SocketIOOptions
             {
                 Query = new List<KeyValuePair<string, string>>

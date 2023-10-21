@@ -39,7 +39,7 @@ namespace Zal
             computer.Accept(new UpdateVisitor());
             var data = new Dictionary<string, dynamic>();
             data["cpu"] = new Dictionary<string, dynamic>();
-            data["gpu"] = new Dictionary<string, dynamic>();
+            data["gpu"] = new List<Dictionary<string, dynamic>>();
             data["ram"] = new Dictionary<string, dynamic>();
             data["motherboard"] = new Dictionary<string, dynamic>();
             data["storages"] = new Dictionary<string, dynamic>();
@@ -111,49 +111,51 @@ namespace Zal
                 }
                 else if (hardware.HardwareType.ToString().ToLower().Contains("gpu"))
                 {
-                    data["gpu"]["name"] = hardware.Name;
+                    Dictionary<string, dynamic> gpu = new Dictionary<string, dynamic>();
+                    gpu["name"] = hardware.Name;
 
                     foreach (ISensor sensor in hardware.Sensors)
                     {
                         if (sensor.SensorType == SensorType.Factor)
                         {
-                            data["gpu"]["fps"] = sensor.Value;
+                            gpu["fps"] = sensor.Value;
                         }
                         if (sensor.SensorType == SensorType.Clock && sensor.Name == "GPU Core")
                         {
-                            data["gpu"]["coreSpeed"] = sensor.Value;
+                            gpu["coreSpeed"] = sensor.Value;
                         }
                         if (sensor.SensorType == SensorType.Clock && sensor.Name == "GPU Memory")
                         {
-                            data["gpu"]["memorySpeed"] = sensor.Value;
+                            gpu["memorySpeed"] = sensor.Value;
                         }
                         if (sensor.SensorType == SensorType.Control && sensor.Name == "GPU Fan")
                         {
-                            data["gpu"]["fanSpeedPercentage"] = sensor.Value;
+                            gpu["fanSpeedPercentage"] = sensor.Value;
                         }
                         if (sensor.SensorType == SensorType.Load && sensor.Name == "GPU Core")
                         {
-                            data["gpu"]["corePercentage"] = sensor.Value;
+                            gpu["corePercentage"] = sensor.Value;
                         }
                         if (sensor.SensorType == SensorType.Power && sensor.Name == "GPU Package")
                         {
-                            data["gpu"]["power"] = sensor.Value;
+                            gpu["power"] = sensor.Value;
                         }
                         if (sensor.SensorType == SensorType.SmallData && sensor.Name == "D3D Dedicated Memory Used")
                         {
-                            data["gpu"]["dedicatedMemoryUsed"] = sensor.Value;
+                            gpu["dedicatedMemoryUsed"] = sensor.Value;
                         }
                         if (sensor.SensorType == SensorType.Voltage)
                         {
-                            data["gpu"]["voltage"] = sensor.Value;
+                            gpu["voltage"] = sensor.Value;
 
 
                         }
                         if (sensor.SensorType == SensorType.Temperature)
                         {
-                            data["gpu"]["temperature"] = sensor.Value;
+                            gpu["temperature"] = sensor.Value;
                         }
                     }
+                    data["gpu"].Add(gpu);
 
 
                 }
