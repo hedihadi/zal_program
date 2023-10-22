@@ -5,12 +5,15 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management;
+using System.Net.NetworkInformation;
 using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Threading;
 
 namespace Zal
 {
@@ -20,6 +23,17 @@ namespace Zal
         {
             cpuInfo = getCpuInfo();
             computer.Open();
+            //give primaryNetworkSpeed a default variable while we start getting the speed
+            NetworkSpeed s = new NetworkSpeed();
+            s.upload = 0;
+            s.download = 0;
+            this.primaryNetworkSpeed = s;
+            //run code that periodically gets the primary network speed
+             Task.Run(() =>
+            {
+                dispatcherTimer_Tick();
+            });
+
         }
         private Computer computer = new Computer
         {
@@ -32,6 +46,7 @@ namespace Zal
             IsStorageEnabled = true
         };
         private CpuInfo cpuInfo;
+        private NetworkSpeed primaryNetworkSpeed;
        
         public Dictionary<String, dynamic> getComputerData()
         {
@@ -43,6 +58,8 @@ namespace Zal
             data["ram"] = new Dictionary<string, dynamic>();
             data["motherboard"] = new Dictionary<string, dynamic>();
             data["storages"] = new Dictionary<string, dynamic>();
+            data["networkInterface"] = getNetworkInterfaceData();
+            
             foreach (IHardware hardware in computer.Hardware)
             {
                 Console.WriteLine("Hardware: {0}", hardware.Name);
@@ -224,6 +241,7 @@ namespace Zal
             }
             data["monitors"] = getMonitorData();
             data["battery"] = getBatteryData();
+            data["networkSpeed"] = primaryNetworkSpeed;
             return data;
         }
         private class UpdateVisitor : IVisitor
@@ -510,9 +528,103 @@ namespace Zal
               .Replace("  ", " ");
             return cpuInfo;
         }
+        private List<NetworkInterfaceInfo> getNetworkInterfaceData()
+        {
+            if (!NetworkInterface.GetIsNetworkAvailable())
+                return new List<NetworkInterfaceInfo>();
+
+            NetworkInterface[] interfaces
+                = NetworkInterface.GetAllNetworkInterfaces();
+            List<NetworkInterfaceInfo> data= new List<NetworkInterfaceInfo>();
+            string primaryNetwork=Zal.Settings.Default.primaryNetworkInterface;
+            
+            foreach (NetworkInterface ni in interfaces)
+            {
+                var stats = ni.GetIPv4Statistics();
+                NetworkInterfaceInfo info = new NetworkInterfaceInfo();
+                info.name=ni.Name;
+                info.description=ni.Description;
+                info.status = ni.OperationalStatus.ToString();
+                info.id= ni.Id;
+                info.bytesReceived = stats.BytesReceived; 
+                info.bytesSent=stats.BytesSent;
+                info.isPrimary = primaryNetwork == ni.Name;
+                data.Add(info);
+            }
+            data.Sort(delegate (NetworkInterfaceInfo c1, NetworkInterfaceInfo c2) { return c2.bytesReceived.CompareTo(c1.bytesReceived); });
+            if (Zal.Settings.Default.primaryNetworkInterface == "0")
+            {
+                //if primary network interface isn't set, we'll set it to the network with highest downloaded bytes
+                Zal.Settings.Default.primaryNetworkInterface = data[0].name;
+                Zal.Settings.Default.Save();
+                Zal.Settings.Default.Reload();
+                Zal.Settings.Default.Upgrade();
+                
+                primaryNetwork = Zal.Settings.Default.primaryNetworkInterface;
+            }
+            //get the speed of primary network
+            return data;
+        }
+private void dispatcherTimer_Tick()
+        {
+            var nics = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+            // Select desired NIC
+            var nic = nics.SingleOrDefault(n => n.Name == Zal.Settings.Default.primaryNetworkInterface);
+            if(nic == null)
+            {
+                return;
+            }
+            var readsBr = Enumerable.Empty<double>();
+            var readsBs = Enumerable.Empty<double>();
+            var sw = new Stopwatch();
+            var lastBr = nic.GetIPv4Statistics().BytesReceived;
+            var lastBs = nic.GetIPv4Statistics().BytesSent;
+            for (var i = 0; i < 1000; i++)
+            {
+
+                sw.Restart();
+                Thread.Sleep(100);
+                var elapsed = sw.Elapsed.TotalSeconds;
+                var br = nic.GetIPv4Statistics().BytesReceived;
+                var bs = nic.GetIPv4Statistics().BytesSent;
+
+                var localBr = (br - lastBr) / elapsed;
+                var localBs = (bs - lastBs) / elapsed;
+                lastBr = br;
+                lastBs = bs;
+
+                // Keep last 20, ~2 seconds
+                readsBr = new[] { localBr }.Concat(readsBr).Take(20);
+                readsBs = new[] { localBs }.Concat(readsBs).Take(20);
+                if (i % 10 == 0)
+                { // ~1 second
+                    var brSec = readsBr.Sum() / readsBs.Count();
+                    var bsSec = readsBs.Sum() / readsBs.Count();
+                    NetworkSpeed s = new NetworkSpeed();
+                    s.download = ((int)brSec);
+                    s.upload = ((int)bsSec);
+                    this.primaryNetworkSpeed = s;
+                }
+            }
+        }
     }
 }
 
+class NetworkSpeed
+{
+    public long download { get; set; }
+    public long upload { get; set; }
+}
+class NetworkInterfaceInfo
+{
+    public string name { get; set; }
+    public string description { get; set; }
+    public string status { get; set; }
+    public string id { get; set; }
+    public long bytesSent { get; set; }
+    public long bytesReceived { get; set; }
+    public bool isPrimary { get; set; }
+}
 class DiskInfo
 {
     public int DiskNumber { get; set; }

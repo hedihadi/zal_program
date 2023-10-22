@@ -46,5 +46,17 @@ namespace Zal {
                 this["minimizeToTray"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public string primaryNetworkInterface {
+            get {
+                return ((string)(this["primaryNetworkInterface"]));
+            }
+            set {
+                this["primaryNetworkInterface"] = value;
+            }
+        }
     }
 }

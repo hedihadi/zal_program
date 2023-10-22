@@ -193,7 +193,6 @@ namespace Zal
             var compressedBytes = CompressString(uncompressedData);
             Dictionary<String, String> map = new Dictionary<String, String>();
             map["data"] = compressedBytes;
-            System.Diagnostics.Debug.WriteLine($"sent payload of {System.Text.ASCIIEncoding.Unicode.GetByteCount(compressedBytes)/1024}kb");
             await socketio.EmitAsync(to, map);
         }
         static string CompressString(string input)
@@ -369,22 +368,22 @@ namespace Zal
 
                 }
             });
+            socketio.On("change_primary_network", response =>
+            {
+                string networkName = response.GetValue<string>();
+                Zal.Settings.Default.primaryNetworkInterface = networkName;
+                Zal.Settings.Default.Save();
+                Zal.Settings.Default.Reload();
+                Zal.Settings.Default.Upgrade();
+            });
+
             socketio.On("kill_process", response =>
             {
                 List<int> parsedData = JsonConvert.DeserializeObject<List<int>>(response.GetValue<string>());
-                // if the data is 1, that means the client type is 1, which means this client is a phone
-                System.Diagnostics.Debug.Write(parsedData);
-                foreach (var pid in parsedData)
+                foreach(int pid in parsedData)
                 {
-                    try
-                    {
-                        Process proc = Process.GetProcessById(pid);
-                        if (!proc.HasExited) proc.Kill();
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Process already exited.
-                    }
+                    var processToKill = Process.GetProcessById(pid);
+                    processToKill.Kill();
                 }
             });
             socketio.On("restart_admin", response =>
@@ -455,10 +454,7 @@ namespace Zal
             try
             {
 
-                //await socketio.ConnectAsync(new Uri($"https://api.zalapp.com?uid={uid}&idToken={idToken}&type=0"));
-                //socketio = socketio.ConnectAsync(new Uri($"http://192.168.0.112:5000?uid={uid}&idToken={idToken}&type=0"));
-                
-                socketio.ConnectAsync();
+  socketio.ConnectAsync();
 
             }
             catch (Exception ex)
@@ -682,6 +678,9 @@ namespace Zal
             };
             dispatcherTimer.Interval = TimeSpan.FromMilliseconds(1000);
             dispatcherTimer.Start();
+
+
+
         }
     }
 }

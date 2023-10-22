@@ -115,5 +115,12 @@ namespace Zal
            
         }
 
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            foreach (var process in Process.GetProcessesByName("task_manager"))
+            {
+                process.Kill();
+            }
+        }
     }
 }
