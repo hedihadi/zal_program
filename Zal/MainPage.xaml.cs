@@ -50,7 +50,7 @@ namespace Zal
         private Process _taskmanagerProcess;
         public bool areThereClientListeners = false;
         List<DiskInfoCrystal> diskInfos;
-        FpsManager fpsManager;
+        FpsManager? fpsManager;
         //this variable is used to save computerdata,
         //we use it to immediately send a packet of data
         //when the user connects. to reduce waiting time on the app.
@@ -59,7 +59,6 @@ namespace Zal
         public MainPage()
         {
             InitializeComponent();
-            fpsManager = new FpsManager(data => sendFpsData(data));
             FirebaseUI.Instance.Client.AuthStateChanged += this.AuthStateChanged;
             socketConnectionChanged(false, isConnecting: true);
             checkForUpdates();
@@ -167,7 +166,7 @@ namespace Zal
             if (IsAdministrator() == false)
             {
                 //dont run because psutil uses too much CPU if it's not running as adminstrator
-                //return;
+                return;
             }
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "task_manager.exe");
             try
@@ -363,7 +362,7 @@ namespace Zal
                     areThereClientListeners = false;
                     addStringToListbox("mobile left");
                     sentTaskmanagerProcessIcons.Clear();
-                    fpsManager.setShouldSendFpsData(false);
+                    fpsManager = null;
 
 
                 }
@@ -412,7 +411,7 @@ namespace Zal
             socketio.On("start_fps", data =>
             {
 
-                fpsManager.setShouldSendFpsData(true);
+                fpsManager = new FpsManager(data => sendFpsData(data));
             });
             socketio.On("stress_test", data =>
             {
@@ -424,8 +423,8 @@ namespace Zal
             socketio.On("stop_fps", response =>
             {
 
-                fpsManager.setShouldSendFpsData(false);
-                fpsManager.clear();
+                fpsManager = null;
+               
             });
             socketio.OnConnected += (sender, args) =>
             {
@@ -645,7 +644,7 @@ namespace Zal
             }
             if (areThereClientListeners == false)
             {
-                fpsManager.setShouldSendFpsData(false);
+                fpsManager = null;
                 return;
             }
 

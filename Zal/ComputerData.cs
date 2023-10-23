@@ -567,6 +567,7 @@ namespace Zal
         }
 private void dispatcherTimer_Tick()
         {
+
             var nics = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
             // Select desired NIC
             var nic = nics.SingleOrDefault(n => n.Name == Zal.Settings.Default.primaryNetworkInterface);
@@ -606,6 +607,7 @@ private void dispatcherTimer_Tick()
                     this.primaryNetworkSpeed = s;
                 }
             }
+            dispatcherTimer_Tick();
         }
     }
 }

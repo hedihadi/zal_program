@@ -1,28 +1,23 @@
-﻿using MaterialDesignThemes.Wpf.Internal;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-
+using Zal.HelperFunctions;
 namespace Zal
 {
     public class FpsManager
     {
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern Int32 GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+      
 
         private Task fpsTask;
         private Process _presentmonProcess;
         private bool shouldSendFpsData = false;
-      private uint? currentFocusedProcessId;
+        private uint? currentFocusedProcessId;
         private List<String> fpsData = new();
-
         private Action<String> sendDataFunction;
         
 
@@ -32,19 +27,31 @@ namespace Zal
 
             //start presentmon
             startPresentmon();
-
-            //run function to update current focused screen every 3 seconds
-            System.Windows.Threading.DispatcherTimer dispatcherTimer = new System.Windows.Threading.DispatcherTimer();
-            dispatcherTimer.Tick += async (sender, e) =>
+            //run function to update current focused screen every 1 seconds
+            Task.Run(() =>
             {
-                await Task.Run(() =>
+
+                while (true)
                 {
-                    currentFocusedProcessId=GetForegroundProcessName();
-                });
-            };
-            dispatcherTimer.Interval = TimeSpan.FromMilliseconds(3000);
-            dispatcherTimer.Start();
-            
+                    currentFocusedProcessId = (new FocusedWindowGetter()).getFocusedWindowProcessId();
+                    Thread.Sleep(5000);
+                }
+            });
+
+            //this function makes sure that presentmon is running. if not, it will attempt to run it
+             Task.Run(() =>
+            {
+                while (true)
+                {
+                    var process = Process.GetProcessesByName("presentmon");
+                    if (process.Length == 0)
+                    {
+                        startPresentmon();
+                    }
+                    Thread.Sleep(1000);
+                }
+            });
+
         }
         private void startPresentmon()
         {
@@ -73,7 +80,8 @@ namespace Zal
 
                 while (!reader.EndOfStream)
                 {
-                    if (shouldSendFpsData == true && currentFocusedProcessId!=null)
+                    Thread.Sleep(30);
+                    if (currentFocusedProcessId!=null)
                     {
                         string line = reader.ReadLine();
                         var msBetweenPresents = "";
@@ -95,7 +103,7 @@ namespace Zal
                         catch {
                             
                         }
-                        System.Diagnostics.Debug.WriteLine($"c: {currentFocusedProcessId}, p: {processId}");
+                        //System.Diagnostics.Debug.WriteLine($"c: {currentFocusedProcessId}, p: {processId}");
                         if (processId!=null && currentFocusedProcessId != null && currentFocusedProcessId== processId)
                         {
                             var time = getTimestamp();
@@ -144,22 +152,6 @@ namespace Zal
             fpsData.Clear();
 
         }
-        private uint? GetForegroundProcessName()
-        {
-            IntPtr hwnd = GetForegroundWindow();
-
-            // The foreground window can be NULL in certain circumstances, 
-            // such as when a window is losing activation.
-            if (hwnd == null)
-                return null;
-
-            uint pid;
-            GetWindowThreadProcessId(hwnd, out pid);
-            System.Diagnostics.Debug.WriteLine(pid.ToString()); 
-            return pid;
-          
-        }
-   
         public void setShouldSendFpsData(bool shouldSendFpsData)
         {
             clear();

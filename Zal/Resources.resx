@@ -125,7 +125,7 @@
     <value>Resources\presentmon.exe;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="stress_test" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\dist.zip;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    <value>Resources\stress_test.zip;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="task_manager" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>Resources\task_manager.exe;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
