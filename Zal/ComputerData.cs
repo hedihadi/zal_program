@@ -51,198 +51,207 @@ namespace Zal
         public Dictionary<String, dynamic> getComputerData()
         {
 
-            computer.Accept(new UpdateVisitor());
-            var data = new Dictionary<string, dynamic>();
-            data["cpu"] = new Dictionary<string, dynamic>();
-            data["gpu"] = new List<Dictionary<string, dynamic>>();
-            data["ram"] = new Dictionary<string, dynamic>();
-            data["motherboard"] = new Dictionary<string, dynamic>();
-            data["storages"] = new Dictionary<string, dynamic>();
-            data["networkInterface"] = getNetworkInterfaceData();
+
+            try {
+                computer.Accept(new UpdateVisitor());
+                var data = new Dictionary<string, dynamic>();
+                data["cpu"] = new Dictionary<string, dynamic>();
+                data["gpu"] = new List<Dictionary<string, dynamic>>();
+                data["ram"] = new Dictionary<string, dynamic>();
+                data["motherboard"] = new Dictionary<string, dynamic>();
+                data["storages"] = new Dictionary<string, dynamic>();
+                data["networkInterface"] = getNetworkInterfaceData();
+
+                foreach (IHardware hardware in computer.Hardware)
+                {
+                    Console.WriteLine("Hardware: {0}", hardware.Name);
+                    if (hardware.HardwareType == HardwareType.Cpu)
+                    {
+                        data["cpu"]["info"] = cpuInfo;
+                        data["cpu"]["name"] = hardware.Name;
+                        data["cpu"]["powers"] = new Dictionary<string, dynamic>();
+                        data["cpu"]["loads"] = new Dictionary<string, dynamic>();
+                        data["cpu"]["voltages"] = new Dictionary<string, dynamic>();
+                        data["cpu"]["clocks"] = new Dictionary<string, dynamic>();
+                        foreach (ISensor sensor in hardware.Sensors)
+                        {
+                            if (sensor.SensorType == SensorType.Power)
+                            {
+                                if (sensor.Name.Contains("Package"))
+                                {
+                                    data["cpu"]["power"] = sensor.Value;
+                                }
+                                else
+                                {
+                                    data["cpu"]["powers"][sensor.Name] = sensor.Value;
+                                }
+                            }
+                            else if (sensor.SensorType == SensorType.Load)
+                            {
+                                if (sensor.Name == "CPU Total")
+                                {
+                                    data["cpu"]["load"] = sensor.Value;
+                                }
+                                else
+                                {
+                                    data["cpu"]["loads"][sensor.Name] = sensor.Value;
+                                }
+                            }
+                            else if (sensor.SensorType == SensorType.Voltage)
+                            {
+                                data["cpu"]["voltages"][sensor.Name] = sensor.Value;
+                            }
+                            else if (sensor.SensorType == SensorType.Clock)
+                            {
+                                data["cpu"]["clocks"][sensor.Name] = sensor.Value;
+                            }
+                            else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("(Tctl/Tdie)"))
+                            {
+                                data["cpu"]["temperature"] = sensor.Value;
+                            }
+                            else
+                            {
+                                var foundSensor = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Name.Contains("(Tctl/Tdie)"));
+                                if (foundSensor == null)
+                                {
+                                    foundSensor = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Name.Contains("Average"));
+                                }
+                                if (foundSensor == null)
+                                {
+                                    foundSensor = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Name.Contains("Core #1"));
+                                }
+                                if (foundSensor != null)
+                                {
+                                    data["cpu"]["temperature"] = foundSensor.Value;
+                                }
+
+                            }
+                        }
+                    }
+                    else if (hardware.HardwareType.ToString().ToLower().Contains("gpu"))
+                    {
+                        Dictionary<string, dynamic> gpu = new Dictionary<string, dynamic>();
+                        gpu["name"] = hardware.Name;
+
+                        foreach (ISensor sensor in hardware.Sensors)
+                        {
+                            if (sensor.SensorType == SensorType.Factor)
+                            {
+                                gpu["fps"] = sensor.Value;
+                            }
+                            if (sensor.SensorType == SensorType.Clock && sensor.Name == "GPU Core")
+                            {
+                                gpu["coreSpeed"] = sensor.Value;
+                            }
+                            if (sensor.SensorType == SensorType.Clock && sensor.Name == "GPU Memory")
+                            {
+                                gpu["memorySpeed"] = sensor.Value;
+                            }
+                            if (sensor.SensorType == SensorType.Control && sensor.Name == "GPU Fan")
+                            {
+                                gpu["fanSpeedPercentage"] = sensor.Value;
+                            }
+                            if (sensor.SensorType == SensorType.Load && sensor.Name == "GPU Core")
+                            {
+                                gpu["corePercentage"] = sensor.Value;
+                            }
+                            if (sensor.SensorType == SensorType.Power && sensor.Name == "GPU Package")
+                            {
+                                gpu["power"] = sensor.Value;
+                            }
+                            if (sensor.SensorType == SensorType.SmallData && sensor.Name == "D3D Dedicated Memory Used")
+                            {
+                                gpu["dedicatedMemoryUsed"] = sensor.Value;
+                            }
+                            if (sensor.SensorType == SensorType.Voltage)
+                            {
+                                gpu["voltage"] = sensor.Value;
+
+
+                            }
+                            if (sensor.SensorType == SensorType.Temperature)
+                            {
+                                gpu["temperature"] = sensor.Value;
+                            }
+                        }
+                        data["gpu"].Add(gpu);
+
+
+                    }
+                    else if (hardware.HardwareType == HardwareType.Memory)
+                    {
+                        data["ram"]["pieces"] = GetRamPiecesInfo();
+                        foreach (ISensor sensor in hardware.Sensors)
+                        {
+                            if (sensor.SensorType == SensorType.Data && sensor.Name == "Memory Used")
+                            {
+                                data["ram"]["memoryUsed"] = sensor.Value;
+                            }
+                            else if (sensor.SensorType == SensorType.Data && sensor.Name == "Memory Available")
+                            {
+                                data["ram"]["memoryAvailable"] = sensor.Value;
+                            }
+                            else if (sensor.SensorType == SensorType.Load && sensor.Name == "Memory")
+                            {
+                                data["ram"]["memoryUsedPercentage"] = sensor.Value;
+                            }
+                        }
+                    }
+                    else if (hardware.HardwareType == HardwareType.Motherboard)
+                    {
+                        data["motherboard"]["name"] = hardware.Name;
+                        foreach (ISensor sensor in hardware.Sensors)
+                        {
+                            if (sensor.SensorType == SensorType.Temperature)
+                            {
+                                data["motherboard"]["temperature"] = sensor.Value;
+                            }
+
+                        }
+                    }
+                    else if (hardware.HardwareType == HardwareType.Storage)
+                    {
+                        data["storages"][hardware.Name] = new Dictionary<string, dynamic>();
+                        var diskNumber = int.Parse(hardware.Identifier.ToString().Substring(hardware.Identifier.ToString().Length - 1));
+                        data["storages"][hardware.Name]["diskNumber"] = diskNumber;
+                        var diskInfo = GetDiskInfo(diskNumber);
+                        data["storages"][hardware.Name]["size"] = diskInfo.TotalSize;
+                        data["storages"][hardware.Name]["freeSpace"] = diskInfo.FreeSpace;
+                        data["storages"][hardware.Name]["partitions"] = new List<String>();
+                        data["storages"][hardware.Name]["mediaType"] = GetDiskMediaType(diskNumber);
+                        foreach (var disk in diskInfo.Partitions)
+                        {
+                            data["storages"][hardware.Name]["partitions"].Add(disk.DriveLetter);
+                        }
+                        foreach (ISensor sensor in hardware.Sensors)
+                        {
+                            if (sensor.SensorType == SensorType.Temperature)
+                            {
+                                data["storages"][hardware.Name]["temperature"] = sensor.Value;
+                            }
+                            else if (sensor.SensorType == SensorType.Throughput && sensor.Name == "Read Rate")
+                            {
+                                data["storages"][hardware.Name]["readRate"] = sensor.Value;
+                            }
+                            else if (sensor.SensorType == SensorType.Throughput && sensor.Name == "Write Rate")
+                            {
+                                data["storages"][hardware.Name]["writeRate"] = sensor.Value;
+                            }
+
+                        }
+                    }
+                }
+                data["monitors"] = getMonitorData();
+                data["battery"] = getBatteryData();
+                data["networkSpeed"] = primaryNetworkSpeed;
+                return data;
             
-            foreach (IHardware hardware in computer.Hardware)
-            {
-                Console.WriteLine("Hardware: {0}", hardware.Name);
-                if (hardware.HardwareType == HardwareType.Cpu)
-                {
-                    data["cpu"]["info"] = cpuInfo;
-                    data["cpu"]["name"] = hardware.Name;
-                    data["cpu"]["powers"] = new Dictionary<string, dynamic>();
-                    data["cpu"]["loads"] = new Dictionary<string, dynamic>();
-                    data["cpu"]["voltages"] = new Dictionary<string, dynamic>();
-                    data["cpu"]["clocks"] = new Dictionary<string, dynamic>();
-                    foreach (ISensor sensor in hardware.Sensors)
-                    {
-                        if (sensor.SensorType == SensorType.Power)
-                        {
-                            if (sensor.Name.Contains("Package"))
-                            {
-                                data["cpu"]["power"] = sensor.Value;
-                            }
-                            else
-                            {
-                                data["cpu"]["powers"][sensor.Name] = sensor.Value;
-                            }
-                        }
-                        else if (sensor.SensorType == SensorType.Load)
-                        {
-                            if (sensor.Name == "CPU Total")
-                            {
-                                data["cpu"]["load"] = sensor.Value;
-                            }
-                            else
-                            {
-                                data["cpu"]["loads"][sensor.Name] = sensor.Value;
-                            }
-                        }
-                        else if (sensor.SensorType == SensorType.Voltage)
-                        {
-                            data["cpu"]["voltages"][sensor.Name] = sensor.Value;
-                        }
-                        else if (sensor.SensorType == SensorType.Clock)
-                        {
-                            data["cpu"]["clocks"][sensor.Name] = sensor.Value;
-                        }
-                        else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("(Tctl/Tdie)"))
-                        {
-                            data["cpu"]["temperature"] = sensor.Value;
-                        }
-                        else
-                        {
-                            var foundSensor = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Name.Contains("(Tctl/Tdie)"));
-                            if (foundSensor == null)
-                            {
-                                foundSensor = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Name.Contains("Average"));
-                            }
-                            if (foundSensor == null)
-                            {
-                                foundSensor = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Name.Contains("Core #1"));
-                            }
-                            if (foundSensor != null)
-                            {
-                                data["cpu"]["temperature"] = foundSensor.Value;
-                            }
-
-                        }
-                    }
-                }
-                else if (hardware.HardwareType.ToString().ToLower().Contains("gpu"))
-                {
-                    Dictionary<string, dynamic> gpu = new Dictionary<string, dynamic>();
-                    gpu["name"] = hardware.Name;
-
-                    foreach (ISensor sensor in hardware.Sensors)
-                    {
-                        if (sensor.SensorType == SensorType.Factor)
-                        {
-                            gpu["fps"] = sensor.Value;
-                        }
-                        if (sensor.SensorType == SensorType.Clock && sensor.Name == "GPU Core")
-                        {
-                            gpu["coreSpeed"] = sensor.Value;
-                        }
-                        if (sensor.SensorType == SensorType.Clock && sensor.Name == "GPU Memory")
-                        {
-                            gpu["memorySpeed"] = sensor.Value;
-                        }
-                        if (sensor.SensorType == SensorType.Control && sensor.Name == "GPU Fan")
-                        {
-                            gpu["fanSpeedPercentage"] = sensor.Value;
-                        }
-                        if (sensor.SensorType == SensorType.Load && sensor.Name == "GPU Core")
-                        {
-                            gpu["corePercentage"] = sensor.Value;
-                        }
-                        if (sensor.SensorType == SensorType.Power && sensor.Name == "GPU Package")
-                        {
-                            gpu["power"] = sensor.Value;
-                        }
-                        if (sensor.SensorType == SensorType.SmallData && sensor.Name == "D3D Dedicated Memory Used")
-                        {
-                            gpu["dedicatedMemoryUsed"] = sensor.Value;
-                        }
-                        if (sensor.SensorType == SensorType.Voltage)
-                        {
-                            gpu["voltage"] = sensor.Value;
-
-
-                        }
-                        if (sensor.SensorType == SensorType.Temperature)
-                        {
-                            gpu["temperature"] = sensor.Value;
-                        }
-                    }
-                    data["gpu"].Add(gpu);
-
-
-                }
-                else if (hardware.HardwareType == HardwareType.Memory)
-                {
-                    data["ram"]["pieces"] = GetRamPiecesInfo();
-                    foreach (ISensor sensor in hardware.Sensors)
-                    {
-                        if (sensor.SensorType == SensorType.Data && sensor.Name == "Memory Used")
-                        {
-                            data["ram"]["memoryUsed"] = sensor.Value;
-                        }
-                        else if (sensor.SensorType == SensorType.Data && sensor.Name == "Memory Available")
-                        {
-                            data["ram"]["memoryAvailable"] = sensor.Value;
-                        }
-                        else if (sensor.SensorType == SensorType.Load && sensor.Name == "Memory")
-                        {
-                            data["ram"]["memoryUsedPercentage"] = sensor.Value;
-                        }
-                    }
-                }
-                else if (hardware.HardwareType == HardwareType.Motherboard)
-                {
-                    data["motherboard"]["name"] = hardware.Name;
-                    foreach (ISensor sensor in hardware.Sensors)
-                    {
-                        if (sensor.SensorType == SensorType.Temperature)
-                        {
-                            data["motherboard"]["temperature"] = sensor.Value;
-                        }
-
-                    }
-                }
-                else if (hardware.HardwareType == HardwareType.Storage)
-                {
-                    data["storages"][hardware.Name] = new Dictionary<string, dynamic>();
-                    var diskNumber = int.Parse(hardware.Identifier.ToString().Substring(hardware.Identifier.ToString().Length - 1));
-                    data["storages"][hardware.Name]["diskNumber"] = diskNumber;
-                    var diskInfo = GetDiskInfo(diskNumber);
-                    data["storages"][hardware.Name]["size"] = diskInfo.TotalSize;
-                    data["storages"][hardware.Name]["freeSpace"] = diskInfo.FreeSpace;
-                    data["storages"][hardware.Name]["partitions"] = new List<String>();
-                    data["storages"][hardware.Name]["mediaType"] = GetDiskMediaType(diskNumber);
-                    foreach (var disk in diskInfo.Partitions)
-                    {
-                        data["storages"][hardware.Name]["partitions"].Add(disk.DriveLetter);
-                    }
-                    foreach (ISensor sensor in hardware.Sensors)
-                    {
-                        if (sensor.SensorType == SensorType.Temperature)
-                        {
-                            data["storages"][hardware.Name]["temperature"] = sensor.Value;
-                        }
-                        else if (sensor.SensorType == SensorType.Throughput && sensor.Name == "Read Rate")
-                        {
-                            data["storages"][hardware.Name]["readRate"] = sensor.Value;
-                        }
-                        else if (sensor.SensorType == SensorType.Throughput && sensor.Name == "Write Rate")
-                        {
-                            data["storages"][hardware.Name]["writeRate"] = sensor.Value;
-                        }
-
-                    }
-                }
             }
-            data["monitors"] = getMonitorData();
-            data["battery"] = getBatteryData();
-            data["networkSpeed"] = primaryNetworkSpeed;
-            return data;
+            catch (Exception ex)
+            {
+                Logger.Log($"exception getting computerData {ex.Message} - {ex.StackTrace}");
+                return null;
+            }
         }
         private class UpdateVisitor : IVisitor
         {
@@ -379,7 +388,7 @@ namespace Zal
             data["life"] = life;
             data["isCharging"] = p.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online;
             data["lifeRemaining"] = p.BatteryLifeRemaining;
-
+            Logger.Log($"got battery life data {string.Join(",", data.Select(kvp => kvp.Key + ": " + kvp.Value.ToString()))}");
             return data;
 
         }
@@ -407,7 +416,7 @@ namespace Zal
             }
             catch (ManagementException ex)
             {
-                Console.WriteLine($"An error occurred: {ex.Message}");
+                Logger.Log($"exception getting diskType for {diskNumber} - {ex.Message} - {ex.StackTrace}");
             }
 
             return "Unknown";

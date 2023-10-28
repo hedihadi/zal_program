@@ -46,7 +46,6 @@ namespace Zal
         List<string> sentTaskmanagerProcessIcons = new List<string>();
 
         bool isConnectedToServer = false;
-
         private Process _taskmanagerProcess;
         public bool areThereClientListeners = false;
         List<DiskInfoCrystal> diskInfos;
@@ -67,11 +66,10 @@ namespace Zal
             setStartup();
             var user = FirebaseUI.Instance.Client.User;
             userName.Text = $"Welcome, {user.Info.DisplayName}.";
-
             setupSocketio();
+            Logger.Log("program started");
 
-
-
+            
 
 
         }
@@ -99,9 +97,11 @@ namespace Zal
         }
         private async Task runCrystalDiskInfo()
         {
+            Logger.Log("running crystaldiskinfo");
             if (IsAdministrator() == false)
             {
-                //dont run if it's not running as adminstrator
+                //dont run if it's not running as adminstrator, because crystaldiskinfo don't work without it
+                Logger.Log("didn't run crystaldiskinfo, program isn't running as adminstrator");
                 return;
             }
             string tempPath = Path.Combine(Path.GetTempPath(), "ZalDiskInfo");
@@ -113,10 +113,6 @@ namespace Zal
 
             // Access the zip file from resources
             byte[] zipData = Zal.Resources.DiskInfo as byte[];
-            if (zipData == null)
-            {
-                throw new Exception("Zip resource not found.");
-            }
 
             // Write the zip data to a temporary file
             string tempZipPath = Path.Combine(tempPath, zipResourceName);
@@ -159,13 +155,14 @@ namespace Zal
             process.WaitForExit();
             string resultPath = Path.Combine(tempPath, "DiskInfo.txt");
             diskInfos = DiskDataClass.getData(resultPath);
-
+            Logger.Log(string.Format("diskinfo started {0}",diskInfos));
         }
         private void startTaskmanager()
         {
             if (IsAdministrator() == false)
             {
                 //dont run because psutil uses too much CPU if it's not running as adminstrator
+                Logger.Log("didn't run taskmanager, program isn't running as adminstrator");
                 return;
             }
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "task_manager.exe");
@@ -173,7 +170,9 @@ namespace Zal
             {
                 File.WriteAllBytes(path, Zal.Resources.task_manager);
             }
-            catch (Exception ex) { }
+            catch (Exception ex) {
+                Logger.Log($"exception writing task_manager {ex.Message} - {ex.StackTrace}");
+            }
 
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
@@ -265,10 +264,7 @@ namespace Zal
 
             // Access the zip file from resources
             byte[] zipData = Zal.Resources.stress_test as byte[];
-            if (zipData == null)
-            {
-                throw new Exception("Zip resource not found.");
-            }
+           
 
             // Write the zip data to a temporary file
             string tempZipPath = Path.Combine(tempPath, zipResourceName);
@@ -314,6 +310,7 @@ namespace Zal
             }
             else
             {
+                Logger.Log("didn't run stress_test, file not found");
                 throw new FileNotFoundException("Executable not found in the extracted files.");
             }
 
@@ -347,7 +344,9 @@ namespace Zal
 
             socketio.On("room_clients", response =>
             {
+                
                 List<int> parsedData = response.GetValue<List<int>>();
+                Logger.Log($"socketio room_clients {string.Join<int>(",", parsedData)}");
                 // if the data is 1, that means the client type is 1, which means this client is a phone
                 if (parsedData.Contains(1))
                 {
@@ -357,7 +356,7 @@ namespace Zal
                         var jsonString = JsonConvert.SerializeObject(this.data);
                         sendSocketData("pc_data", jsonString);
                     }
-
+                    
                     addStringToListbox("mobile joined");
                     sentTaskmanagerProcessIcons.Clear();
                     //send diskinfo
@@ -379,7 +378,9 @@ namespace Zal
             });
             socketio.On("change_primary_network", response =>
             {
+               
                 string networkName = response.GetValue<string>();
+                Logger.Log($"changing primary_network {networkName}");
                 Zal.Settings.Default.primaryNetworkInterface = networkName;
                 Zal.Settings.Default.Save();
                 Zal.Settings.Default.Reload();
@@ -389,7 +390,8 @@ namespace Zal
             socketio.On("kill_process", response =>
             {
                 List<int> parsedData = JsonConvert.DeserializeObject<List<int>>(response.GetValue<string>());
-                foreach(int pid in parsedData)
+                Logger.Log($"killing process {string.Join<int>(",", parsedData)}");
+                foreach (int pid in parsedData)
                 {
                     var processToKill = Process.GetProcessById(pid);
                     processToKill.Kill();
@@ -397,6 +399,7 @@ namespace Zal
             });
             socketio.On("restart_admin", response =>
             {
+                Logger.Log($"restarting as admin");
                 string selfPath = Process.GetCurrentProcess().MainModule.FileName;
 
                 var proc = new Process
@@ -420,19 +423,21 @@ namespace Zal
             });
             socketio.On("start_fps", data =>
             {
-
+                Logger.Log($"starting fps");
                 fpsManager = new FpsManager(data => sendFpsData(data));
             });
             socketio.On("stress_test", data =>
             {
+                
                 string unescapedJson = data.GetValue<String>().Replace("\\", "");
                 Dictionary<string, dynamic> parsedData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(unescapedJson);
+                Logger.Log($"starting stress_test {parsedData["type"]},{parsedData["seconds"]}");
                 extractAndRunStressTest(parsedData["type"], parsedData["seconds"]);
 
             });
             socketio.On("stop_fps", response =>
             {
-
+                Logger.Log($"stopping fps");
                 fpsManager?.Dispose();
                 fpsManager = null;
 
@@ -513,12 +518,14 @@ namespace Zal
                     }
                     else
                     {
+                        Logger.Log($"failed downloading update {response.StatusCode}");
                         Console.WriteLine($"Failed to download the file. Status code: {response.StatusCode}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"An error occurred: {ex.Message}");
+                    Logger.Log($"error during update {ex.Message} - {ex.StackTrace}");
+                    
                 }
             }
         }
@@ -566,7 +573,7 @@ namespace Zal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"An error occurred: {ex.Message}");
+                Logger.Log($"error looking for update {ex.Message} = {ex.StackTrace}");
             }
         }
 
@@ -600,7 +607,10 @@ namespace Zal
         {
             FirebaseUI.Instance.Client.SignOut();
         }
-
+        private void viewLogClicked(object sender, RoutedEventArgs e)
+        {
+           Process.Start("notepad.exe", Logger.GetLogFilePath());  
+        }
         private void minimizeToTray_Click(object sender, RoutedEventArgs e)
         {
             Zal.Settings.Default.minimizeToTray = !Zal.Settings.Default.minimizeToTray;
@@ -649,9 +659,9 @@ namespace Zal
                 this.data["taskmanager"] = taskmanager;
 
             }
-            catch (Exception c)
+            catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(c);
+                Logger.Log($"error during main tick {ex.Message} - {ex.StackTrace}");
             }
             if (areThereClientListeners == false)
             {

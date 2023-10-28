@@ -60,7 +60,9 @@ namespace Zal
             {
                 File.WriteAllBytes(path, Zal.Resources.presentmon);
             }
-            catch (Exception ex) { }
+            catch (Exception ex) {
+                Logger.Log($"exception writing presentmon {ex.Message} - {ex.StackTrace}");
+            }
 
             ProcessStartInfo startInfo = new ProcessStartInfo
             {

@@ -20,7 +20,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-
+using Zal;
 namespace Zal
 {
     /// <summary>
@@ -34,7 +34,7 @@ namespace Zal
             FirebaseUI.Instance.Client.AuthStateChanged += this.AuthStateChanged;
 
             setupTrayMenu();
-         
+            Logger.ResetLog();
 
         }
         
