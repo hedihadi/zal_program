@@ -25,8 +25,6 @@ namespace Zal.HelperFunctions
             // such as when a window is losing activation.
             if (hwnd == IntPtr.Zero)
                 return null;
-            var a=hwnd.ToInt32();
-            System.Diagnostics.Debug.WriteLine(a);
             uint pid;
             GetWindowThreadProcessId(hwnd, out pid);
             var proc = Process.GetProcessById(((int)pid));
@@ -42,11 +40,15 @@ namespace Zal.HelperFunctions
 public static class ProcessExtensions
 {
     public static IList<Process> GetChildProcesses(this Process process)
-        => new ManagementObjectSearcher(
+    {
+      var processes=  new ManagementObjectSearcher(
                 $"Select * From Win32_Process Where ParentProcessID={process.Id}")
             .Get()
             .Cast<ManagementObject>()
             .Select(mo =>
                 Process.GetProcessById(Convert.ToInt32(mo["ProcessID"])))
             .ToList();
+        processes.Add(process);
+        return processes;
+    }
 }

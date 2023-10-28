@@ -371,6 +371,7 @@ namespace Zal
                     areThereClientListeners = false;
                     addStringToListbox("mobile left");
                     sentTaskmanagerProcessIcons.Clear();
+                    fpsManager?.Dispose();
                     fpsManager = null;
 
 
@@ -432,8 +433,9 @@ namespace Zal
             socketio.On("stop_fps", response =>
             {
 
+                fpsManager?.Dispose();
                 fpsManager = null;
-               
+
             });
             socketio.OnConnected += (sender, args) =>
             {
@@ -653,6 +655,7 @@ namespace Zal
             }
             if (areThereClientListeners == false)
             {
+                fpsManager?.Dispose();
                 fpsManager = null;
                 return;
             }

@@ -17,7 +17,7 @@ namespace Zal
         private IList<int>? currentFocusedProcessId;
         private List<String> fpsData = new();
         private Action<string> sendDataFunction;
-
+        private bool isDisposed = false;
         public FpsManager(Action<String> sendDataFunction)
         {
             this.sendDataFunction = sendDataFunction;
@@ -42,6 +42,7 @@ namespace Zal
             {
                 while (true)
                 {
+                    if (isDisposed) break;
                     var process = Process.GetProcessesByName("presentmon");
                     if (process.Length == 0)
                     {
@@ -79,6 +80,7 @@ namespace Zal
 
                 while (!reader.EndOfStream)
                 {
+                    if (isDisposed) break;
                     Thread.Sleep(30);
                     if (currentFocusedProcessId!=null)
                     {
@@ -140,6 +142,13 @@ namespace Zal
             };
             fpsTask = new Task(fpsAction, "fpsTask");
             fpsTask.Start();
+            
+        }
+        public void Dispose()
+        {
+            isDisposed = true;
+            _presentmonProcess.Kill();
+            _presentmonProcess.Dispose();
             
         }
         private static String getTimestamp()
