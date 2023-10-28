@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Management;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -10,11 +13,11 @@ namespace Zal.HelperFunctions
     {
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [DllImport("user32.dll", SetLastError = true)]
         private static extern Int32 GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
 
-        public uint? getFocusedWindowProcessId()
+        public IList<int>? getFocusedWindowProcessId()
         {
             IntPtr hwnd = GetForegroundWindow();
 
@@ -22,13 +25,28 @@ namespace Zal.HelperFunctions
             // such as when a window is losing activation.
             if (hwnd == IntPtr.Zero)
                 return null;
-
+            var a=hwnd.ToInt32();
+            System.Diagnostics.Debug.WriteLine(a);
             uint pid;
             GetWindowThreadProcessId(hwnd, out pid);
-            return pid;
+            var proc = Process.GetProcessById(((int)pid));
+
+            return proc.GetChildProcesses().Select(process => process.Id).ToList();
 
         }
 
 
     }
+
+}
+public static class ProcessExtensions
+{
+    public static IList<Process> GetChildProcesses(this Process process)
+        => new ManagementObjectSearcher(
+                $"Select * From Win32_Process Where ParentProcessID={process.Id}")
+            .Get()
+            .Cast<ManagementObject>()
+            .Select(mo =>
+                Process.GetProcessById(Convert.ToInt32(mo["ProcessID"])))
+            .ToList();
 }

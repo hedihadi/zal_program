@@ -81,7 +81,7 @@ namespace Zal
             sendSocketData("fps_data",data);
             addStringToListbox("sent fps data");
         }
-
+       
         public static bool IsAdministrator()
         {
             return (new WindowsPrincipal(WindowsIdentity.GetCurrent()))
@@ -192,7 +192,16 @@ namespace Zal
             var compressedBytes = CompressString(uncompressedData);
             Dictionary<String, String> map = new Dictionary<String, String>();
             map["data"] = compressedBytes;
-            await socketio.EmitAsync(to, map);
+            try
+            {
+                await socketio.EmitAsync(to, map);
+                
+            }
+            catch (Exception c)
+            {
+                addStringToListbox(c.Message);
+            }
+            
         }
         static string CompressString(string input)
         {
@@ -324,8 +333,8 @@ namespace Zal
         {
             var uid = FirebaseUI.Instance.Client.User.Uid;
             var idToken = await FirebaseUI.Instance.Client.User.GetIdTokenAsync();
-            //socketio = new SocketIOClient.SocketIO($"http://192.168.0.112:5000",
-            socketio = new SocketIOClient.SocketIO($"https://api.zalapp.com",
+            socketio = new SocketIOClient.SocketIO($"http://192.168.0.107:5000",
+            //socketio = new SocketIOClient.SocketIO($"https://api.zalapp.com",
                 new SocketIOOptions
             {
                 Query = new List<KeyValuePair<string, string>>

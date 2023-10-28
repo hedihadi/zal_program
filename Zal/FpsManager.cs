@@ -11,20 +11,16 @@ namespace Zal
 {
     public class FpsManager
     {
-      
-
         private Task fpsTask;
         private Process _presentmonProcess;
         private bool shouldSendFpsData = false;
-        private uint? currentFocusedProcessId;
+        private IList<int>? currentFocusedProcessId;
         private List<String> fpsData = new();
-        private Action<String> sendDataFunction;
-        
+        private Action<string> sendDataFunction;
 
-      public FpsManager(Action<String> sendDataFunction)
+        public FpsManager(Action<String> sendDataFunction)
         {
             this.sendDataFunction = sendDataFunction;
-
             //start presentmon
             startPresentmon();
             //run function to update current focused screen every 1 seconds
@@ -33,8 +29,11 @@ namespace Zal
 
                 while (true)
                 {
+                    var oldProcessId = currentFocusedProcessId;
                     currentFocusedProcessId = (new FocusedWindowGetter()).getFocusedWindowProcessId();
-                    Thread.Sleep(5000);
+
+                 
+                    Thread.Sleep(2000);
                 }
             });
 
@@ -103,9 +102,10 @@ namespace Zal
                         catch {
                             
                         }
-                        //System.Diagnostics.Debug.WriteLine($"c: {currentFocusedProcessId}, p: {processId}");
-                        if (processId!=null && currentFocusedProcessId != null && currentFocusedProcessId== processId)
+                        System.Diagnostics.Debug.WriteLine($"c: {string.Join(",", currentFocusedProcessId.ToArray())}, p: {processId} - {processName}");
+                        if (processId!=null && currentFocusedProcessId != null && currentFocusedProcessId.Contains(((int)processId)))
                         {
+                          
                             var time = getTimestamp();
                             Dictionary<String, String> data = new Dictionary<String, String>();
                             if (msBetweenPresents.Any(char.IsDigit))
@@ -115,7 +115,7 @@ namespace Zal
                                 //data["process"] = line.Split(",")[0];
                                 fpsData.Add(JsonConvert.SerializeObject(data));
 
-                                if (fpsData.Count > 30)
+                                if (fpsData.Count > 10)
                                 {
                                     var jsonString = JsonConvert.SerializeObject(fpsData);
                                     sendDataFunction.Invoke(jsonString);
